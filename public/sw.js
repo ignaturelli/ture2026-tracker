@@ -1,17 +1,14 @@
-// Service Worker for Ture 2026 - enables PWA install + notification support
-const CACHE_NAME = 'ture2026-v1';
+// Service Worker for Ture 2026 - v2
+const CACHE_NAME = 'ture2026-v2';
 
 self.addEventListener('install', (event) => {
+  // Tomar control inmediatamente sin esperar
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll([
-        '/',
-        '/index.html',
-        '/manifest.json'
-      ]);
+      return cache.addAll(['/manifest.json']);
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -25,10 +22,18 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Network first: SIEMPRE pide la versión más nueva al servidor
 self.addEventListener('fetch', (event) => {
+  // No cachear el HTML principal — siempre red
+  if (event.request.url.endsWith('/') || event.request.url.endsWith('/index.html')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+  // Resto: network first, cache fallback
   event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
+    fetch(event.request).catch(() => caches.match(event.request))
   );
 });
