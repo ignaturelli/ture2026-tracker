@@ -76,14 +76,14 @@
     /* FASTING */
     .fast-card { background:var(--card); border-radius:var(--r); padding:16px 18px; margin-bottom:12px; box-shadow:var(--sh); border:1.5px solid var(--border); }
     .fast-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-    .fast-state { display:flex; align-items:center; gap:8px; }
+    .fast-state { display:flex; align-items:center; gap:8px; flex:1; min-width:0; }
     .fast-dot { width:9px; height:9px; border-radius:50%; background:var(--muted); flex-shrink:0; }
     .fast-dot.active { background:#4caf50; box-shadow:0 0 0 3px rgba(76,175,80,.2); }
     .fast-dot.fasting { background:var(--blue); box-shadow:0 0 0 3px rgba(123,151,255,.2); animation:pulse-dot 2s infinite; }
     @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:.5;} }
-    .fast-label { font-size:.8rem; font-weight:700; color:var(--text); }
-    .fast-sublabel { font-size:.68rem; color:var(--muted); margin-top:1px; }
-    .fast-time { font-size:2rem; font-weight:900; color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-.5px; line-height:1; }
+    .fast-label { font-size:.8rem; font-weight:700; color:var(--text); white-space:nowrap; }
+    .fast-sublabel { font-size:.65rem; color:var(--muted); margin-top:1px; white-space:nowrap; }
+    .fast-time { font-size:clamp(1.35rem,6vw,2rem); font-weight:900; color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-.5px; line-height:1; flex-shrink:0; white-space:nowrap; }
     .fast-bar-wrap { background:#eef2ee; border-radius:100px; height:8px; overflow:hidden; }
     .fast-bar { height:100%; border-radius:100px; transition:width .5s ease; background:linear-gradient(90deg,var(--blue),#a5b4fc); }
     .fast-bar.active { background:linear-gradient(90deg,#4caf50,#81c784); }
@@ -702,16 +702,18 @@ async function sendTelegram(text){
 }
 
 function scheduleTelegramReminders(){
-  const cfg=getTgConfig();if(!cfg)return;
   setInterval(()=>{
     const now=new Date(),h=now.getHours(),m=now.getMinutes(),td=getToday();
-    // Suplementos: morning 8:00 and night 22:00
-    if(h===8&&m===0&&!td.h.supls) sendTelegram('💊 <b>Suplementos matutinos</b>\nTomá tu Omega 3 y Creatina con el primer mate.');
-    if(h===22&&m===0&&!td.h.supls) sendTelegram('💊 <b>Magnesio antes de dormir</b>\nBisglicinato 400mg. Recuperación y sueño profundo.');
-    // Water: every 2h during work
-    if(h>=9&&h<=19&&h%2===0&&m===0&&(td.water||0)<WATER_GOAL) sendTelegram(`💧 <b>Hidratación</b>\nLlevás ${td.water||0}/${WATER_GOAL} botellas. Tomá agua.`);
-    // EOD reminder
-    if(h===20&&m===30){const missing=HABITS.filter(hab=>hab.type==='toggle'&&!td.h[hab.id]);if(missing.length>0&&missing.length<=5) sendTelegram(`⚡ <b>Te faltan ${missing.length} hábitos</b>\n${missing.map(h=>h.ico+' '+h.name).join('\n')}`);}
+    // Suplementos: 8:00 y 22:00
+    if(h===8&&m===0&&!td.h.supls) sendTelegram('💊 Suplementos matutinos\nToma tu Omega 3 y Creatina con el primer mate.');
+    if(h===22&&m===0&&!td.h.supls) sendTelegram('💊 Magnesio antes de dormir\nBisglicinato 400mg. Recuperacion y sueno profundo.');
+    // Agua: cada 2hs durante el trabajo
+    if(h>=9&&h<=19&&h%2===0&&m===0&&(td.water||0)<WATER_GOAL) sendTelegram(`💧 Hidratacion\nLlevas ${td.water||0}/${WATER_GOAL} botellas. Toma agua.`);
+    // Recordatorio hábitos faltantes 20:30
+    if(h===20&&m===30){
+      const missing=HABITS.filter(hab=>hab.type==='toggle'&&!td.h[hab.id]);
+      if(missing.length>0&&missing.length<=6) sendTelegram('⚡ Te faltan '+missing.length+' habitos hoy\n'+missing.map(hb=>hb.ico+' '+hb.name.split('·')[0].trim()).join('\n'));
+    }
   },60000);
 }
 
