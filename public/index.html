@@ -313,6 +313,11 @@
     .lvup-btn { width:100%; height:48px; background:var(--g); color:#fff; border:none; border-radius:12px; font-family:inherit; font-size:.95rem; font-weight:700; cursor:pointer; }
     @keyframes confetti-fall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1;} 100%{transform:translateY(100vh) rotate(720deg);opacity:0;} }
     .footer { text-align:center; padding:28px 0 8px; font-size:.68rem; color:var(--muted); }
+
+    /* SYNC STATUS */
+    .hdr-sync { display:flex; align-items:center; gap:4px; margin-top:4px; }
+    #syncDot { width:6px; height:6px; border-radius:50%; background:#cbd5e1; flex-shrink:0; transition:background .3s; }
+    #syncLabel { font-size:.58rem; font-weight:600; color:var(--muted); }
   </style>
 </head>
 <body>
@@ -322,6 +327,7 @@
       <div class="hdr-greet" id="greet">Buenos días, Ture</div>
       <div class="hdr-title">Ture 2026</div>
       <div class="hdr-date" id="hDate"></div>
+      <div class="hdr-sync"><span id="syncDot"></span><span id="syncLabel">offline</span></div>
     </div>
     <div class="hdr-streak" id="streakBox">
       <div class="hdr-streak-n" id="streakNum">0</div>
@@ -530,6 +536,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 // ═══════════════════════════════════════
 // CONFIG
@@ -631,7 +638,7 @@ function getToday(){
   if(td.breath===undefined)td.breath=0;
   save(d);return td;
 }
-function saveToday(td){const d=load();d[dk()]=td;save(d)}
+function saveToday(td){const d=load();d[dk()]=td;save(d);syncUp(dk(),td);}
 function getUnlocked(){try{return JSON.parse(localStorage.getItem('ture2026_ach')||'[]')}catch{return[]}}
 function saveUnlocked(a){localStorage.setItem('ture2026_ach',JSON.stringify(a))}
 function getBreathCount(){return Object.values(load()).reduce((s,dd)=>s+(dd.breath||0),0)}
@@ -728,6 +735,80 @@ function scheduleTelegramReminders(){
       if(missing.length>0&&missing.length<=6) sendTelegram('⚡ Te faltan '+missing.length+' habitos hoy\n'+missing.map(hb=>hb.ico+' '+hb.name.split('·')[0].trim()).join('\n'));
     }
   },60000);
+}
+
+// ═══════════════════════════════════════
+// SUPABASE SYNC
+// ═══════════════════════════════════════
+const SB_URL = 'https://cqkdekdfqysvafuionzm.supabase.co';
+const SB_KEY = 'sb_publishable_qOoypz4meN4Xu_80OdQTsw_UF1hzUm-';
+let sbClient = null;
+
+function initSupabase() {
+  try {
+    if (typeof supabase !== 'undefined') {
+      sbClient = supabase.createClient(SB_URL, SB_KEY);
+    }
+  } catch(e) { console.log('Supabase init error:', e); }
+}
+
+function setSyncStatus(state) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  if (!dot) return;
+  if (state === 'syncing') { dot.style.background = '#f59e0b'; if(lbl) lbl.textContent = 'sync…'; }
+  else if (state === 'synced') { dot.style.background = '#4caf50'; if(lbl) lbl.textContent = 'synced ✓'; }
+  else { dot.style.background = '#cbd5e1'; if(lbl) lbl.textContent = 'offline'; }
+}
+
+async function syncUp(dateKey, dayData) {
+  if (!sbClient) return;
+  try {
+    setSyncStatus('syncing');
+    const { error } = await sbClient
+      .from('ture2026_sync')
+      .upsert({ date_key: dateKey, payload: dayData, updated_at: new Date().toISOString() }, { onConflict: 'date_key' });
+    setSyncStatus(error ? 'offline' : 'synced');
+  } catch(e) { setSyncStatus('offline'); }
+}
+
+async function syncDown() {
+  if (!sbClient) return;
+  try {
+    setSyncStatus('syncing');
+    const { data, error } = await sbClient.from('ture2026_sync').select('date_key, payload');
+    if (error || !data) { setSyncStatus('offline'); return; }
+    const local = load();
+    let changed = false;
+    data.forEach(row => {
+      const k = row.date_key;
+      const remote = row.payload;
+      if (!remote) return;
+      if (!local[k]) {
+        local[k] = remote; changed = true;
+      } else {
+        const loc = local[k];
+        // Merge: habit true in either wins; counters take max
+        const mergedH = {};
+        const allHKeys = new Set([...Object.keys(remote.h||{}), ...Object.keys(loc.h||{})]);
+        allHKeys.forEach(hk => { mergedH[hk] = !!(remote.h?.[hk] || loc.h?.[hk]); });
+        const remoteG4 = Array.isArray(remote.g4) ? remote.g4 : Array.from({length:remote.g4||0},(_,i)=>i);
+        const localG4  = Array.isArray(loc.g4)    ? loc.g4    : Array.from({length:loc.g4||0},(_,i)=>i);
+        const mergedG4 = [...new Set([...remoteG4, ...localG4])].sort((a,b)=>a-b);
+        const merged = {
+          h: mergedH,
+          g4: mergedG4,
+          peso: loc.peso ?? remote.peso,
+          water: Math.max(loc.water||0, remote.water||0),
+          mission: loc.mission || remote.mission,
+          breath: Math.max(loc.breath||0, remote.breath||0),
+        };
+        if (JSON.stringify(merged) !== JSON.stringify(loc)) { local[k] = merged; changed = true; }
+      }
+    });
+    if (changed) { save(local); renderAll(); showToast('☁️ Datos sincronizados'); }
+    setSyncStatus('synced');
+  } catch(e) { setSyncStatus('offline'); }
 }
 
 // ═══════════════════════════════════════
@@ -1069,7 +1150,12 @@ function confirmReset(){if(confirm('¿Resetear todos los datos de hoy?')){const 
 // ═══════════════════════════════════════
 prevLvName=getLv(totalXP()).name;
 prevPerfect=isPerfectDay(getToday());
+initSupabase();
 renderAll();
+syncDown(); // async: merges remote data and re-renders if anything new
+
+// Sync every 5 minutes while page is open
+setInterval(syncDown, 5 * 60 * 1000);
 
 // Telegram: start reminders on load
 scheduleTelegramReminders();
