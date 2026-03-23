@@ -556,7 +556,7 @@ const ACHIEVEMENTS = [
   {id:'str7',ico:'📅',name:'Una semana entera',desc:'7 días consecutivos',progress:()=>bestStreak(),target:7},
   {id:'str14',ico:'🗓️',name:'Quincena de fuego',desc:'14 días consecutivos',progress:()=>bestStreak(),target:14},
   {id:'str30',ico:'🏅',name:'Mes completo',desc:'30 días consecutivos',progress:()=>bestStreak(),target:30},
-  {id:'glut4max',ico:'⚡',name:'GLUT4 Total',desc:'11/11 sesiones en un mismo día',progress:d=>{const m=Object.values(d).map(dd=>dd.g4||0);return Math.max(0,...m);},target:11},
+  {id:'glut4max',ico:'⚡',name:'GLUT4 Total',desc:'11/11 sesiones en un mismo día',progress:d=>{const m=Object.values(d).map(dd=>getG4Count(dd));return Math.max(0,...m);},target:11},
   {id:'lv2',ico:'🌱',name:'Adaptado',desc:'Alcanzaste el Nivel 2 (500 XP)',progress:()=>totalXP(),target:500},
   {id:'lv3',ico:'🔥',name:'Máquina',desc:'Alcanzaste el Nivel 3 (2000 XP)',progress:()=>totalXP(),target:2000},
   {id:'w1',ico:'⚖️',name:'−1 kg',desc:'Primer kilogramo perdido',progress:()=>weightLost(),target:1},
@@ -612,7 +612,7 @@ function load(){try{return JSON.parse(localStorage.getItem('ture2026')||'{}')}ca
 function save(d){localStorage.setItem('ture2026',JSON.stringify(d))}
 function getToday(){
   const d=load(),k=dk();
-  if(!d[k])d[k]={h:{},g4:0,peso:null,water:0,mission:false,breath:0};
+  if(!d[k])d[k]={h:{},g4:[],peso:null,water:0,mission:false,breath:0};
   const td=d[k];
   if(td.water===undefined)td.water=0;
   if(td.mission===undefined)td.mission=false;
@@ -623,6 +623,9 @@ function saveToday(td){const d=load();d[dk()]=td;save(d)}
 function getUnlocked(){try{return JSON.parse(localStorage.getItem('ture2026_ach')||'[]')}catch{return[]}}
 function saveUnlocked(a){localStorage.setItem('ture2026_ach',JSON.stringify(a))}
 function getBreathCount(){return Object.values(load()).reduce((s,dd)=>s+(dd.breath||0),0)}
+// g4 stored as array of hour indices (0=9h … 10=19h), backward-compat with old number
+function getG4Count(dd){if(!dd)return 0;if(Array.isArray(dd.g4))return dd.g4.length;return dd.g4||0;}
+function getG4Hours(dd){if(!dd)return [];if(Array.isArray(dd.g4))return dd.g4;return Array.from({length:dd.g4||0},(_,i)=>i);}
 function getMissionCount(){return Object.values(load()).filter(dd=>dd.mission).length}
 
 // ═══════════════════════════════════════
@@ -632,7 +635,7 @@ function dayXP(dd){
   if(!dd)return 0; let x=0;
   HABITS.forEach(h=>{
     if(h.type==='toggle'&&dd.h&&dd.h[h.id])x+=h.xp;
-    else if(h.id==='glut4')x+=(dd.g4||0)*h.xp;
+    else if(h.id==='glut4')x+=getG4Count(dd)*h.xp;
   });
   if(dd.mission)x+=getDailyMissionForDate(null).xp;
   x+=(dd.breath||0)*15;
@@ -898,7 +901,7 @@ function renderLevel(){
 }
 function renderProgress(){
   const td=getToday(),toggleTotal=HABITS.filter(h=>h.type==='toggle').length,done=countToggleDone(td);
-  const g4=td.g4||0,total=toggleTotal+1,completedUnits=done+(g4>=11?1:g4/11);
+  const g4=getG4Count(td),total=toggleTotal+1,completedUnits=done+(g4>=11?1:g4/11);
   document.getElementById('ringCircle').style.strokeDashoffset=238.76*(1-completedUnits/total);
   document.getElementById('ringN').textContent=done;document.getElementById('ringSub').textContent='/ '+toggleTotal;
   document.getElementById('psXP').textContent=dayXP(td);document.getElementById('psDays').textContent=countDays();
@@ -926,11 +929,16 @@ function renderHabits(){
       div.innerHTML=`<span class="hc-ico">${h.ico}</span><div class="hc-info"><div class="hc-name">${h.name}</div><div class="hc-desc">${h.desc}</div></div><div class="hc-xp">+${h.xp} XP</div><div class="hc-check"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 3.5L4 6.5L9 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="hc-streak-mini ${habitStreak>=3?'show':''}">${habitStreak}d 🔥</span>`;
       div.addEventListener('click',e=>toggleH(h.id,h.xp,e));list.appendChild(div);
     }else{
-      const s=td.g4||0;const HRS=['9h','10h','11h','12h','13h','14h','15h','16h','17h','18h','19h'];
-      const dots=HRS.map((hr,i)=>`<div class="g4-dot${i<s?' on':''}">${hr}</div>`).join('');
+      const done=getG4Hours(td);const cnt=done.length;
+      const HRS=['9h','10h','11h','12h','13h','14h','15h','16h','17h','18h','19h'];
       const div=document.createElement('div');div.className='g4-card';
-      div.innerHTML=`<div class="g4-top"><span class="hc-ico">${h.ico}</span><div class="g4-txt"><div class="hc-name">${h.name}</div><div class="hc-desc">${h.desc}</div></div><div class="g4-xp">+${h.xp} XP×n</div></div><div class="g4-prog">Sesiones: <b>${s} / ${h.max}</b> · <b>${s*h.xp} XP ganados</b></div><div class="g4-dots">${dots}</div><div class="g4-btns"><button class="g4-btn" onclick="adjG4(-1)">− Quitar</button><button class="g4-btn primary" onclick="adjG4(1)">+ Sesión completada</button></div>`;
+      div.innerHTML=`<div class="g4-top"><span class="hc-ico">${h.ico}</span><div class="g4-txt"><div class="hc-name">${h.name}</div><div class="hc-desc">${h.desc}</div></div><div class="g4-xp">+${h.xp} XP×n</div></div><div class="g4-prog">Sesiones: <b>${cnt} / ${h.max}</b> · <b>${cnt*h.xp} XP ganados</b></div><div class="g4-dots" id="g4Dots"></div>`;
       list.appendChild(div);
+      const dotsEl=div.querySelector('#g4Dots');
+      HRS.forEach((hr,i)=>{
+        const dot=document.createElement('div');dot.className='g4-dot'+(done.includes(i)?' on':'');dot.textContent=hr;
+        dot.addEventListener('click',()=>toggleG4Hour(i));dotsEl.appendChild(dot);
+      });
     }
   });
 }
@@ -1024,9 +1032,13 @@ function toggleH(id,xp,event){
   else{showToast(was?`−${xp} XP`:`+${xp} XP ✓`)}
   prevPerfect=nowPerfect;checkAchievements();renderAll();
 }
-function adjG4(delta){
-  const td=getToday(),cur=td.g4||0,nv=Math.max(0,Math.min(11,cur+delta));
-  if(nv!==cur){td.g4=nv;saveToday(td);showToast(delta>0?'+10 XP ✓':'−10 XP');haptic();if(delta>0)trackCombo();if(nv===11){setTimeout(confetti,100);haptic('heavy')}checkAchievements();renderAll()}
+function toggleG4Hour(idx){
+  const td=getToday();
+  if(!Array.isArray(td.g4))td.g4=getG4Hours(td); // migrate old number
+  const was=td.g4.includes(idx);
+  if(was){td.g4=td.g4.filter(i=>i!==idx);showToast('−10 XP');}
+  else{td.g4=[...td.g4,idx].sort((a,b)=>a-b);showToast('+10 XP ✓');trackCombo();if(td.g4.length===11){setTimeout(confetti,100);haptic('heavy');}}
+  saveToday(td);haptic();checkAchievements();renderAll();
 }
 function logWeight(){
   const input=document.getElementById('wInput'),val=parseFloat(input.value);
