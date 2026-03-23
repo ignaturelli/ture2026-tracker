@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ture2026",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "public", "-l", "3002"],
+      "port": 3002
+    }
+  ]
+}
