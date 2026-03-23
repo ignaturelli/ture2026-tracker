@@ -318,24 +318,7 @@
     </div>
   </div>
 
-  <!-- TELEGRAM CONFIG -->
-  <div class="tg-banner" id="tgBanner">
-    <div class="tg-banner-top">
-      <span class="tg-banner-ico">📲</span>
-      <span class="tg-banner-txt">Conectar Telegram para recordatorios</span>
-      <button class="tg-banner-close" onclick="closeTgBanner()">✕</button>
-    </div>
-    <div class="tg-inputs">
-      <input class="tg-input" id="tgToken" placeholder="Bot Token (de @BotFather)" />
-      <input class="tg-input" id="tgChatId" placeholder="Tu Chat ID" />
-    </div>
-    <div class="tg-btns">
-      <button class="tg-btn secondary" onclick="testTelegram()">Probar</button>
-      <button class="tg-btn primary" onclick="saveTelegram()">Guardar</button>
-    </div>
-    <div class="tg-status" id="tgStatus">✅ Conectado</div>
-    <div class="tg-help">1. Buscá @BotFather en Telegram → /newbot<br>2. Copiá el token acá<br>3. Abrí el bot y enviá /start<br>4. Buscá @userinfobot para tu Chat ID</div>
-  </div>
+  <!-- TELEGRAM: configured, no UI needed -->
 
   <div class="dr-msg">
     <span class="dr-msg-ico">🩺</span>
@@ -513,7 +496,7 @@
     <div class="quote-author">Dr. Sebastián de la Rosa · Medicina Funcional</div>
   </div>
 
-  <div class="sec" style="margin-top:20px"><span class="sec-act" onclick="toggleTgBanner()">⚙️ Telegram</span></div>
+  <div class="sec" style="margin-top:20px"></div>
 
   <div class="footer">Ture 2026 · De 91 kg a 84 kg · 15% BF · Córdoba, Argentina</div>
 </div>
@@ -701,48 +684,18 @@ function showCombo(text){const el=document.createElement('div');el.className='co
 // ═══════════════════════════════════════
 function haptic(style){if(navigator.vibrate)navigator.vibrate(style==='heavy'?[30,20,50]:15)}
 
-// Telegram
-function getTgConfig(){try{return JSON.parse(localStorage.getItem('ture2026_tg')||'null')}catch{return null}}
-function saveTgConfig(cfg){localStorage.setItem('ture2026_tg',JSON.stringify(cfg))}
-
-function toggleTgBanner(){document.getElementById('tgBanner').classList.toggle('show')}
-function closeTgBanner(){document.getElementById('tgBanner').classList.remove('show')}
+// Telegram — hardcoded config
+const TG_TOKEN = '8646496592:AAGa5gAaYAsQ_PVe3RMKz3lMbjfIQQzclgY';
+const TG_CHAT  = '1081238112';
 
 async function sendTelegram(text){
-  const cfg=getTgConfig();if(!cfg||!cfg.token||!cfg.chatId)return false;
   try{
-    const r=await fetch(`https://api.telegram.org/bot${cfg.token}/sendMessage`,{
+    const r=await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:cfg.chatId,text,parse_mode:'HTML'})
+      body:JSON.stringify({chat_id:TG_CHAT,text,parse_mode:'HTML'})
     });
     return r.ok;
   }catch{return false}
-}
-
-async function testTelegram(){
-  const token=document.getElementById('tgToken').value.trim();
-  const chatId=document.getElementById('tgChatId').value.trim();
-  if(!token||!chatId){showToast('Completá token y chat ID');return}
-  const status=document.getElementById('tgStatus');
-  status.textContent='⏳ Enviando...';status.classList.add('show');
-  try{
-    const r=await fetch(`https://api.telegram.org/bot${token}/sendMessage`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:chatId,text:'🧬 <b>Ture 2026</b> conectado.\nVas a recibir recordatorios de suplementos y agua.',parse_mode:'HTML'})
-    });
-    if(r.ok){status.textContent='✅ ¡Mensaje enviado! Revisá Telegram';showToast('✅ Telegram conectado');}
-    else{const j=await r.json();status.textContent='❌ Error: '+(j.description||'Revisá los datos');}
-  }catch(e){status.textContent='❌ Error de conexión';}
-}
-
-function saveTelegram(){
-  const token=document.getElementById('tgToken').value.trim();
-  const chatId=document.getElementById('tgChatId').value.trim();
-  if(!token||!chatId){showToast('Completá token y chat ID');return}
-  saveTgConfig({token,chatId});
-  showToast('💾 Telegram guardado');
-  document.getElementById('tgBanner').classList.remove('show');
-  scheduleTelegramReminders();
 }
 
 function scheduleTelegramReminders(){
@@ -1091,10 +1044,8 @@ prevLvName=getLv(totalXP()).name;
 prevPerfect=isPerfectDay(getToday());
 renderAll();
 
-// Telegram: show banner if not configured, load saved config into inputs
-const savedTg=getTgConfig();
-if(!savedTg){document.getElementById('tgBanner').classList.add('show')}
-else{document.getElementById('tgToken').value=savedTg.token||'';document.getElementById('tgChatId').value=savedTg.chatId||'';scheduleTelegramReminders();}
+// Telegram: start reminders on load
+scheduleTelegramReminders();
 
 function setQuote(){document.getElementById('drQuote').textContent='\u201c'+QUOTES[Math.floor(Math.random()*QUOTES.length)]+'\u201d'}
 setQuote();setInterval(setQuote,30000);
