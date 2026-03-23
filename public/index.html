@@ -754,8 +754,6 @@ function scheduleTelegramReminders(){
     if(h===22&&m===0&&!td.h.supls) sendTelegram('💊 <b>Magnesio antes de dormir</b>\nBisglicinato 400mg. Recuperación y sueño profundo.');
     // Water: every 2h during work
     if(h>=9&&h<=19&&h%2===0&&m===0&&(td.water||0)<WATER_GOAL) sendTelegram(`💧 <b>Hidratación</b>\nLlevás ${td.water||0}/${WATER_GOAL} botellas. Tomá agua.`);
-    // GLUT4 hourly reminder during work
-    if(h>=9&&h<=19&&m===0){const expected=h-8;if((td.g4||0)<expected) sendTelegram(`🦵 <b>GLUT4</b>\nSon las ${h}hs. ¿Hiciste tus sentadillas? Llevás ${td.g4||0} sesiones.`);}
     // EOD reminder
     if(h===20&&m===30){const missing=HABITS.filter(hab=>hab.type==='toggle'&&!td.h[hab.id]);if(missing.length>0&&missing.length<=5) sendTelegram(`⚡ <b>Te faltan ${missing.length} hábitos</b>\n${missing.map(h=>h.ico+' '+h.name).join('\n')}`);}
   },60000);
