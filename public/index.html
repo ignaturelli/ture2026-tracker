@@ -704,9 +704,10 @@ async function sendTelegram(text){
 function scheduleTelegramReminders(){
   setInterval(()=>{
     const now=new Date(),h=now.getHours(),m=now.getMinutes(),td=getToday();
-    // Suplementos: 8:00 y 22:00
-    if(h===8&&m===0&&!td.h.supls) sendTelegram('💊 Suplementos matutinos\nToma tu Omega 3 y Creatina con el primer mate.');
-    if(h===22&&m===0&&!td.h.supls) sendTelegram('💊 Magnesio antes de dormir\nBisglicinato 400mg. Recuperacion y sueno profundo.');
+    // Creatina 8:30 - en la botella de camino al trabajo
+    if(h===8&&m===30&&!td.h.supls) sendTelegram('Creatina 5g: pone la dosis en tu botella de 709ml y tomala yendo al trabajo.');
+    // Magnesio + Omega 3 noche 22:00
+    if(h===22&&m===0&&!td.h.supls) sendTelegram('Suplementos nocturnos: Magnesio Bisglicinato 400mg + Omega 3. Recuperacion y sueno profundo.');
     // Agua: cada 2hs durante el trabajo
     if(h>=9&&h<=19&&h%2===0&&m===0&&(td.water||0)<WATER_GOAL) sendTelegram(`💧 Hidratacion\nLlevas ${td.water||0}/${WATER_GOAL} botellas. Toma agua.`);
     // Recordatorio hábitos faltantes 20:30

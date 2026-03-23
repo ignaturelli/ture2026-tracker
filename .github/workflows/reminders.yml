@@ -1,0 +1,64 @@
+name: Telegram Reminders - Ture 2026
+
+on:
+  schedule:
+    # Todos los horarios en UTC (Argentina = UTC-3)
+    - cron: '30 11 * * 1-5'  # 8:30 ART  - Creatina (lunes a viernes)
+    - cron: '0 14 * * 1-5'   # 11:00 ART - Agua reminder
+    - cron: '0 18 * * 1-5'   # 15:00 ART - Agua reminder
+    - cron: '30 23 * * *'    # 20:30 ART - Habitos faltantes
+    - cron: '0 1 * * *'      # 22:00 ART - Magnesio + Omega 3
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Enviar mensaje de prueba'
+        required: false
+        default: 'test'
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determinar y enviar recordatorio
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # Hora actual en Argentina (Córdoba)
+          HOUR=$(TZ='America/Argentina/Cordoba' date +%H)
+          MIN=$(TZ='America/Argentina/Cordoba' date +%M)
+          WEEKDAY=$(TZ='America/Argentina/Cordoba' date +%u)  # 1=lun ... 7=dom
+
+          echo "Hora Argentina: ${HOUR}:${MIN} (dia ${WEEKDAY})"
+
+          send_msg() {
+            curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" \
+              --data-binary "{\"chat_id\":\"${TG_CHAT}\",\"text\":\"$1\"}" \
+              | jq -r '.ok'
+          }
+
+          # 8:30 - Creatina (dias de semana)
+          if [ "$HOUR" = "08" ] && [ "$MIN" = "30" ] && [ "$WEEKDAY" -le 5 ]; then
+            send_msg "Creatina 5g: pone la dosis en tu botella de 709ml y tomala yendo al trabajo."
+
+          # 11:00 - Agua
+          elif [ "$HOUR" = "11" ] && [ "$MIN" = "00" ]; then
+            send_msg "Agua: ya van 2 horas de trabajo. Como va la botella?"
+
+          # 15:00 - Agua
+          elif [ "$HOUR" = "15" ] && [ "$MIN" = "00" ]; then
+            send_msg "Agua: tarde caliente. Llevas al menos 1 botella completada?"
+
+          # 20:30 - Habitos del dia
+          elif [ "$HOUR" = "20" ] && [ "$MIN" = "30" ]; then
+            send_msg "Cierre del dia: entra a la app y marca los habitos que hiciste hoy. No dejes puntos sobre la mesa."
+
+          # 22:00 - Magnesio + Omega 3
+          elif [ "$HOUR" = "22" ] && [ "$MIN" = "00" ]; then
+            send_msg "Suplementos nocturnos: Magnesio Bisglicinato 400mg + Omega 3. Recuperacion muscular y sueno profundo."
+
+          # Workflow dispatch (test manual)
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            send_msg "Test: bot de recordatorios funcionando correctamente."
+          fi
