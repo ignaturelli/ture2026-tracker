@@ -26,10 +26,11 @@ jobs:
         run: |
           # Hora actual en Argentina (Córdoba)
           HOUR=$(TZ='America/Argentina/Cordoba' date +%H)
-          MIN=$(TZ='America/Argentina/Cordoba' date +%M)
           WEEKDAY=$(TZ='America/Argentina/Cordoba' date +%u)  # 1=lun ... 7=dom
+          UTC_HOUR=$(date +%H)
+          UTC_MIN=$(date +%M)
 
-          echo "Hora Argentina: ${HOUR}:${MIN} (dia ${WEEKDAY})"
+          echo "Hora Argentina: ${HOUR}h (dia ${WEEKDAY}) | UTC: ${UTC_HOUR}:${UTC_MIN}"
 
           send_msg() {
             curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
@@ -38,27 +39,27 @@ jobs:
               | jq -r '.ok'
           }
 
-          # 8:30 - Creatina (dias de semana)
-          if [ "$HOUR" = "08" ] && [ "$MIN" = "30" ] && [ "$WEEKDAY" -le 5 ]; then
-            send_msg "Creatina 5g: pone la dosis en tu botella de 709ml y tomala yendo al trabajo."
+          # 8:xx ART - Creatina (dias de semana)
+          if [ "$HOUR" = "08" ] && [ "$WEEKDAY" -le 5 ]; then
+            send_msg "Creatina 5g: pone la dosis en tu botella de 709ml y tomala yendo al trabajo. 💊"
 
-          # 11:00 - Agua
-          elif [ "$HOUR" = "11" ] && [ "$MIN" = "00" ]; then
-            send_msg "Agua: ya van 2 horas de trabajo. Como va la botella?"
+          # 11:xx ART - Agua
+          elif [ "$HOUR" = "11" ]; then
+            send_msg "Agua: ya van 2 horas de trabajo. Como va la botella? 💧"
 
-          # 15:00 - Agua
-          elif [ "$HOUR" = "15" ] && [ "$MIN" = "00" ]; then
-            send_msg "Agua: tarde caliente. Llevas al menos 1 botella completada?"
+          # 15:xx ART - Agua
+          elif [ "$HOUR" = "15" ]; then
+            send_msg "Agua: tarde caliente. Llevas al menos 1 botella completada? 💧"
 
-          # 20:30 - Habitos del dia
-          elif [ "$HOUR" = "20" ] && [ "$MIN" = "30" ]; then
-            send_msg "Cierre del dia: entra a la app y marca los habitos que hiciste hoy. No dejes puntos sobre la mesa."
+          # 20:xx ART - Habitos del dia
+          elif [ "$HOUR" = "20" ]; then
+            send_msg "Cierre del dia: entra a la app y marca los habitos que hiciste hoy. No dejes puntos sobre la mesa. ⚡"
 
-          # 22:00 - Magnesio + Omega 3
-          elif [ "$HOUR" = "22" ] && [ "$MIN" = "00" ]; then
-            send_msg "Suplementos nocturnos: Magnesio Bisglicinato 400mg + Omega 3. Recuperacion muscular y sueno profundo."
+          # 22:xx ART - Magnesio + Omega 3
+          elif [ "$HOUR" = "22" ]; then
+            send_msg "Suplementos nocturnos: Magnesio Bisglicinato 400mg + Omega 3. Recuperacion muscular y sueno profundo. 🌙"
 
           # Workflow dispatch (test manual)
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            send_msg "Test: bot de recordatorios funcionando correctamente."
+            send_msg "Test: bot de recordatorios funcionando correctamente. ✅"
           fi
