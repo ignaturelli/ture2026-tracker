@@ -44,8 +44,8 @@
     .bar{margin-top:16px;height:8px;width:100%;background:var(--c2);border-radius:999px;overflow:hidden}
     .bar-fill{height:100%;background:var(--acc);border-radius:999px;transition:width .5s cubic-bezier(.4,0,.2,1)}
     .hdr-foot{margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-family:var(--mono);font-size:.68rem;color:var(--t3)}
-    .sync{display:flex;align-items:center;gap:6px;flex-shrink:0}
-    .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--t4);transition:background .3s}
+    .save{display:flex;align-items:center;gap:6px;flex-shrink:0}
+    .save-dot{width:6px;height:6px;border-radius:50%;background:var(--t4);transition:background .3s}
 
     /* SEMANA */
     .row-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -148,7 +148,7 @@
     <div class="bar"><div class="bar-fill" id="lvBar" style="width:0%"></div></div>
     <div class="hdr-foot">
       <span id="lvNext">&nbsp;</span>
-      <span class="sync"><i class="sync-dot" id="syncDot"></i><span id="syncLabel">local</span></span>
+      <span class="save"><i class="save-dot" id="saveDot"></i><span id="saveLabel">guardado</span></span>
     </div>
   </header>
 
@@ -222,7 +222,6 @@
 <div class="skel" id="skel">Cargando la planilla…</div>
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 // ═══════════════════════════════════════
 // CONFIG
@@ -266,8 +265,9 @@ const today = () => iso(new Date());
 // ═══════════════════════════════════════
 // ESTADO
 // ═══════════════════════════════════════
+// Todo vive en el localStorage de este dispositivo, no hay servidor.
 // log:  { '2026-08-16': ['gym','mob'] }   ids de actividades del día
-// ts:   { '2026-08-16': 1755370000000 }   última edición, para resolver conflictos de sync
+// ts:   { '2026-08-16': 1755370000000 }   cuándo se editó por última vez
 let log = {}, ts = {}, goals = {week:5, year:100};
 let selected = today();
 let cursor = { y: new Date().getFullYear(), m: new Date().getMonth() };
@@ -280,8 +280,27 @@ function loadLocal(){
     goals = { week: raw.goals?.week ?? 5, year: raw.goals?.year ?? 100 };
   } catch(e) { /* primera vez, arrancamos de cero */ }
 }
+// Este es el único lugar donde quedan los datos, así que si falla hay que avisar.
+let saveTimer;
 function saveLocal(){
-  localStorage.setItem(STORE_KEY, JSON.stringify({ log, ts, goals }));
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ log, ts, goals }));
+    setSaved('saving');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => setSaved('saved'), 400);
+    return true;
+  } catch(e) {
+    clearTimeout(saveTimer);
+    setSaved('error');
+    return false;
+  }
+}
+function setSaved(state){
+  const dot = document.getElementById('saveDot'), lbl = document.getElementById('saveLabel');
+  if (!dot) return;
+  const map = { saving:['#facc15','guardando…'], saved:['#16a34a','guardado'], error:['#dc2626','no se guardó'] };
+  const [c,t] = map[state] || map.saved;
+  dot.style.background = c; lbl.textContent = t;
 }
 
 const idsOf = (key) => log[key] || [];
@@ -295,12 +314,14 @@ function toggle(key, id, ev){
 
   log[key] = was ? cur.filter(x => x !== id) : [...cur, id];
   ts[key] = Date.now();
-  saveLocal();
-  syncUp(key);
+  const ok = saveLocal();
 
   haptic();
   if (ev) spawnPts(ACT[id].pts, !was, ev);
   render();
+
+  // El aviso de que no se pudo guardar manda: no lo tapamos con el de puntos
+  if (!ok) { showToast('No se pudo guardar en este dispositivo'); return; }
 
   // Confetti solo en el toque exacto que completa la meta de la semana en curso
   if (weekBefore < goals.week && weekSessions() >= goals.week) {
@@ -315,8 +336,8 @@ function clearDay(){
   if (!confirm(`Borrar lo cargado el ${selected}?`)) return;
   log[selected] = [];
   ts[selected] = Date.now();
-  saveLocal(); syncUp(selected); render();
-  showToast('Día borrado');
+  const ok = saveLocal(); render();
+  showToast(ok ? 'Día borrado' : 'No se pudo guardar en este dispositivo');
 }
 
 // ═══════════════════════════════════════
@@ -501,84 +522,6 @@ function confetti(){
 }
 
 // ═══════════════════════════════════════
-// SUPABASE SYNC
-// ═══════════════════════════════════════
-// La app anda 100% con localStorage. El sync es opcional: sirve para ver la
-// misma planilla en el iPhone y en la compu.
-//
-// Para activarlo, creá un proyecto en Supabase, corré esto en el SQL editor:
-//
-//   create table ture2026_sync (
-//     date_key text primary key,
-//     payload jsonb,
-//     updated_at timestamptz default now()
-//   );
-//   alter table ture2026_sync enable row level security;
-//   create policy "acceso publico" on ture2026_sync for all using (true) with check (true);
-//
-// y pegá abajo la URL y la publishable key. Ojo: con esa policy cualquiera que
-// vea el HTML puede leer y escribir la tabla. Para una planilla de entrenos da
-// lo mismo, para algo sensible no.
-//
-// Conflictos entre dispositivos: gana la edición más nueva (ts).
-const SB_URL = '';
-const SB_KEY = '';
-const PFX = 't-';   // prefijo del date_key
-let sbClient = null;
-
-function initSupabase(){
-  if (!SB_URL || !SB_KEY) { setSync('local'); return; }
-  try { if (typeof supabase !== 'undefined') sbClient = supabase.createClient(SB_URL, SB_KEY); }
-  catch(e) { console.log('Supabase init error:', e); setSync('local'); }
-}
-function setSync(state){
-  const dot = document.getElementById('syncDot'), lbl = document.getElementById('syncLabel');
-  if (!dot) return;
-  const map = { syncing:['#facc15','sync…'], synced:['#16a34a','synced'], offline:['#dc2626','sin conexión'], local:['#57534e','solo local'] };
-  const [c,t] = map[state] || map.local;
-  dot.style.background = c; lbl.textContent = t;
-}
-async function syncUp(key){
-  if (!sbClient) return;
-  try {
-    setSync('syncing');
-    const { error } = await sbClient.from('ture2026_sync').upsert(
-      { date_key: PFX + key, payload: { train: idsOf(key), ts: ts[key] || 0 }, updated_at: new Date().toISOString() },
-      { onConflict: 'date_key' });
-    setSync(error ? 'offline' : 'synced');
-  } catch(e) { setSync('offline'); }
-}
-async function syncGoals(){
-  if (!sbClient) return;
-  try {
-    await sbClient.from('ture2026_sync').upsert(
-      { date_key: PFX + 'goals', payload: { goals, ts: Date.now() }, updated_at: new Date().toISOString() },
-      { onConflict: 'date_key' });
-  } catch(e) { /* se reintenta en el próximo cambio */ }
-}
-async function syncDown(){
-  if (!sbClient) return;
-  try {
-    setSync('syncing');
-    const { data, error } = await sbClient.from('ture2026_sync').select('date_key, payload').like('date_key', PFX + '%');
-    if (error || !data) { setSync('offline'); return; }
-    let changed = false;
-    data.forEach(row => {
-      const key = row.date_key.slice(PFX.length), p = row.payload;
-      if (!p) return;
-      if (key === 'goals') {
-        if (p.goals && !localStorage.getItem(STORE_KEY)) { goals = p.goals; changed = true; }
-        return;
-      }
-      if (!Array.isArray(p.train)) return;
-      if ((p.ts || 0) > (ts[key] || 0)) { log[key] = p.train; ts[key] = p.ts || 0; changed = true; }
-    });
-    if (changed) { saveLocal(); render(); showToast('Datos sincronizados ☁️'); }
-    setSync('synced');
-  } catch(e) { setSync('offline'); }
-}
-
-// ═══════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════
 loadLocal();
@@ -586,24 +529,23 @@ document.getElementById('goalWeek').value = goals.week;
 document.getElementById('goalYear').value = goals.year;
 document.getElementById('goalWeek').addEventListener('change', e => {
   goals.week = Math.max(1, Math.min(7, Number(e.target.value) || 1));
-  e.target.value = goals.week; saveLocal(); syncGoals(); render();
+  e.target.value = goals.week; saveLocal(); render();
 });
 document.getElementById('goalYear').addEventListener('change', e => {
   goals.year = Math.max(1, Math.min(999, Number(e.target.value) || 1));
-  e.target.value = goals.year; saveLocal(); syncGoals(); render();
+  e.target.value = goals.year; saveLocal(); render();
 });
 
 document.getElementById('skel').remove();
 document.getElementById('app').hidden = false;
-initSupabase();
+setSaved('saved');
 render();
-syncDown();
 
-setInterval(syncDown, 5 * 60 * 1000);
+// Si la app quedó abierta y cambió el día, saltar al día nuevo
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
-  if (selected !== today() && !idsOf(selected).length) goToday(); // cambió el día mientras estaba en background
-  syncDown();
+  if (selected !== today() && !idsOf(selected).length) goToday();
+  render();
 });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 </script>

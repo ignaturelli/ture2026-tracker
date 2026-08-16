@@ -1,6 +1,6 @@
 # Ture 2026 · Planilla de entrenamiento
 
-PWA de una sola página para anotar entrenos. Sin build, sin framework: todo vive en
+PWA de una sola página para anotar entrenos. Guarda todo en el propio dispositivo, sin cuentas ni servidores. Sin build, sin framework: todo vive en
 [`public/index.html`](public/index.html).
 
 ## Cómo funciona
@@ -22,25 +22,34 @@ npm run dev     # http://localhost:3002
 
 ## Datos
 
-Todo se guarda en `localStorage` bajo la key `ture2026_train`:
+**No hay servidor ni base de datos.** Todo se guarda en el `localStorage` del dispositivo que
+estés usando, bajo la key `ture2026_train`:
 
 ```json
 { "log": { "2026-08-16": ["gym","mob"] }, "ts": { "2026-08-16": 1755370000000 }, "goals": { "week": 5, "year": 100 } }
 ```
 
-El sync a Supabase viene **desactivado** (`SB_URL` vacío) y la app funciona igual, solo local.
-Para activarlo y ver la misma planilla en el celu y en la compu, seguí las instrucciones del
-comentario en la sección `SUPABASE SYNC` del `index.html`.
+Consecuencias, para tenerlas presentes:
+
+- El celu y la compu llevan planillas separadas, cada una con lo suyo.
+- Si borrás los datos del navegador o desinstalás la PWA, se pierde lo cargado en ese dispositivo.
+- Funciona sin internet.
+
+El puntito arriba a la derecha muestra el estado del guardado: verde *guardado*, amarillo
+*guardando*, rojo *no se guardó* (pasa si el navegador está en modo privado o sin espacio).
 
 > La key `ture2026` de localStorage es del tracker de hábitos anterior. No se toca ni se lee,
 > queda ahí por si algún día querés recuperar esos datos.
 
-## Recordatorios
-
-[`.github/workflows/reminders.yml`](.github/workflows/reminders.yml) manda mensajes por Telegram
-vía cron de GitHub Actions. Usa los secrets `TELEGRAM_TOKEN` y `TELEGRAM_CHAT_ID` del repo.
-Se puede probar a mano desde la pestaña Actions con *Run workflow*.
-
 ## Deploy
 
-Vercel, sitio estático desde `public/`. Push a `master` y listo.
+Vercel, sitio estático desde `public/`.
+
+Ojo: la production branch del proyecto en Vercel **no** es `master`, así que un push solo genera
+un deployment de Preview y el dominio sigue mostrando lo viejo. Hasta arreglar eso en
+Settings > Git, después de pushear hay que promover a mano:
+
+```bash
+vercel ls ture2026-tracker        # copiar la URL del preview mas reciente
+vercel promote <url> --yes
+```
