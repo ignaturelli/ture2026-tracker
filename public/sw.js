@@ -1,5 +1,5 @@
-// Service Worker for Ture 2026 - v2
-const CACHE_NAME = 'ture2026-v2';
+// Service Worker for Ture 2026 - v3 (planilla de entrenamiento)
+const CACHE_NAME = 'ture2026-v3';
 
 self.addEventListener('install', (event) => {
   // Tomar control inmediatamente sin esperar
